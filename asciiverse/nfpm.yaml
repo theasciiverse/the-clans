@@ -1,0 +1,45 @@
+# System packages (.deb, .rpm, .apk, Arch) for The Clans, built by nfpm
+# from the staged av archive (stage-av/). The release workflow sets
+# VERSION, RELEASE (our packaging release) and ARCH (amd64 or arm64).
+# No .desktop file on purpose: av is the one place titles are started from.
+name: the-clans
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+release: ${RELEASE}
+section: games
+priority: optional
+maintainer: Asciiverse <packages@asciiverse.sh>
+vendor: Asciiverse
+homepage: https://github.com/theasciiverse/the-clans
+license: GPL-2.0-or-later AND LGPL-2.1
+description: |
+  The Clans, the BBS door game of clans, villages and empires.
+  Raise a clan of four, fight through the mines, run your village and
+  build an empire, a few fights each day. By Allen Ussher, as kept in
+  the Synchronet tree, packaged by Asciiverse.
+contents:
+  - src: stage-av/the-clans
+    dst: /usr/lib/the-clans/the-clans
+    file_info: { mode: 0755 }
+  - src: stage-av/lib/
+    dst: /usr/lib/the-clans/lib/
+    file_info: { mode: 0755 }
+  - src: stage-av/game/
+    dst: /usr/lib/the-clans/game/
+    file_info: { mode: 0644 }
+  - src: /usr/lib/the-clans/the-clans
+    dst: /usr/bin/the-clans
+    type: symlink
+  - src: stage-av/LICENSE
+    dst: /usr/share/doc/the-clans/copyright
+    file_info: { mode: 0644 }
+  - src: stage-av/LICENSE-OpenDoors
+    dst: /usr/share/doc/the-clans/LICENSE-OpenDoors
+    file_info: { mode: 0644 }
+  - src: stage-av/README.md
+    dst: /usr/share/doc/the-clans/README.md
+    file_info: { mode: 0644 }
+  - src: stage-av/PATCHES.md
+    dst: /usr/share/doc/the-clans/PATCHES.md
+    file_info: { mode: 0644 }

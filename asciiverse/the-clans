@@ -1,0 +1,59 @@
+#!/bin/sh
+# The Clans for Asciiverse: plays a local game in the player's own folder.
+#
+# The game keeps its world in the folder it runs in, so this script gives
+# it one of its own: $XDG_STATE_HOME/the-clans (~/.local/state/the-clans),
+# or ~/Library/Application Support/the-clans on macOS. The data that ships
+# with the game is copied there on every start (so updates reach it); the
+# world, the clans and the news are the player's and are never touched.
+# The first start makes a fresh village with the default settings. Several
+# players can share the village on one machine: each logs in by name.
+#
+#   the-clans            play
+#   the-clans --reset    start the village afresh (asks first)
+#
+# CLANS_LOCAL_TIMELIMIT sets the minutes per session (default 480).
+set -eu
+
+# where the game is: beside this script (an av archive), or the package's
+# folder this script is linked from
+self=$0
+while [ -h "$self" ]; do
+	link=$(ls -ld "$self" | sed 's/.* -> //')
+	case $link in /*) self=$link ;; *) self=$(dirname "$self")/$link ;; esac
+done
+here=$(cd "$(dirname "$self")" && pwd -P)
+game="$here/game"
+[ -d "$game" ] || { echo "the-clans: game files not found in $game" >&2; exit 1; }
+
+if [ "$(uname)" = Darwin ]; then
+	state="$HOME/Library/Application Support/the-clans"
+else
+	state="${XDG_STATE_HOME:-$HOME/.local/state}/the-clans"
+fi
+mkdir -p "$state/outbound"
+
+# the shipped data, fresh on every start
+for f in "$game"/*; do
+	[ -f "$f" ] && cp -f "$f" "$state/"
+done
+
+cd "$state"
+[ -f clans.cfg ] || printf '%s\n' \
+	'# The Clans, a local game on this machine (written by the Asciiverse launcher)' \
+	"SysopName       ${USER:-Player}" \
+	'BBSName         Asciiverse' \
+	'UseLog          Yes' > clans.cfg
+
+if [ "${1:-}" = --reset ]; then
+	printf 'Start the village afresh? Every clan in it is lost. [y/N] '
+	read -r answer
+	case $answer in y|Y|yes|YES) rm -f game.dat ;; *) exit 0 ;; esac
+fi
+
+# a new village the first time (and after --reset)
+[ -f game.dat ] || "$here/lib/reset" --local </dev/null >/dev/null
+
+CLANS_LOCAL_TIMELIMIT=${CLANS_LOCAL_TIMELIMIT:-480}
+export CLANS_LOCAL_TIMELIMIT
+exec "$here/lib/clans" /L

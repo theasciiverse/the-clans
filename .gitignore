@@ -11,3 +11,5 @@ test
 Clans-*.tar.gz
 Clans-*.zip
 ClansDevKit-*.zip
+stage-av/
+dist/

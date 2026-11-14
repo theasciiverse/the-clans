@@ -148,6 +148,16 @@ static void LocalLoad(void)
 	      name[i] = toupper(name[i]); */
 	strlcpy(od_control.user_location, Config.szBBSName, sizeof(od_control.user_location));
 	od_control.user_timelimit = 30;
+	{
+		/* Asciiverse: a launcher playing local games sets the session's
+		 * time limit in minutes (1 to 1440); 30 when unset, as before. */
+		const char *limit = getenv("CLANS_LOCAL_TIMELIMIT");
+		if (limit) {
+			long minutes = strtol(limit, NULL, 10);
+			if (minutes >= 1 && minutes <= 1440)
+				od_control.user_timelimit = (int)minutes;
+		}
+	}
 	od_control.od_info_type = CUSTOM;
 	od_control.user_ansi = true;
 	od_control.user_screen_length = 25;

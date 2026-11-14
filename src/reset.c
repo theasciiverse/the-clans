@@ -58,13 +58,14 @@ static void News_CreateTodayNews(void);
 static void CreateVillageDat(struct ResetData *ResetData);
 
 static void UpdateOption(int16_t Option);
+static void InitDefaults(void);
 
 static struct ResetData ResetData;
 
 static char szTodaysDate[11];
 
 
-int main(void)
+int main(int argc, char *argv[])
 {
 	time_t now = time(NULL);
 	struct tm tm = *localtime(&now);
@@ -83,9 +84,35 @@ int main(void)
 
 	// load up config
 
+	/* Asciiverse: "reset --local" makes a fresh local game with the
+	 * default settings, no menu, for a launcher setting up a new world. */
+	if (argc > 1 && strcmp(argv[1], "--local") == 0) {
+		InitDefaults();
+		GoReset(&ResetData, RESET_LOCAL);
+		Video_Close();
+		return (0);
+	}
+
 	ResetMenu();
 	Video_Close();
 	return (0);
+}
+
+static void InitDefaults(void)
+{
+	strlcpy(ResetData.szDateGameStart, szTodaysDate, sizeof(ResetData.szDateGameStart));
+	strlcpy(ResetData.szLastJoinDate, "12/16/2199", sizeof(ResetData.szLastJoinDate));
+	strlcpy(ResetData.szVillageName, "The Village", sizeof(ResetData.szVillageName));
+	ResetData.InterBBSGame = Config.InterBBS;
+	ResetData.LeagueWide = false;
+	ResetData.InProgress = false;
+	ResetData.ClanTravel = true;
+	ResetData.LostDays = 3;
+	ResetData.ClanEmpires = true;
+	ResetData.MineFights = FIGHTSPERDAY;
+	ResetData.ClanFights = CLANCOMBATADAY;
+	ResetData.DaysOfProtection = 4;
+	ResetData.MaxPermanentMembers = 4;
 }
 
 static void ResetMenu(void)
@@ -124,20 +151,7 @@ static void ResetMenu(void)
 
 	qputs("|09 Press the up and down keys to navigate.", 0, 17);
 
-	/* init defaults */
-	strlcpy(ResetData.szDateGameStart, szTodaysDate, sizeof(ResetData.szDateGameStart));
-	strlcpy(ResetData.szLastJoinDate, "12/16/2199", sizeof(ResetData.szLastJoinDate));
-	strlcpy(ResetData.szVillageName, "The Village", sizeof(ResetData.szVillageName));
-	ResetData.InterBBSGame = Config.InterBBS;
-	ResetData.LeagueWide = false;
-	ResetData.InProgress = false;
-	ResetData.ClanTravel = true;
-	ResetData.LostDays = 3;
-	ResetData.ClanEmpires = true;
-	ResetData.MineFights = FIGHTSPERDAY;
-	ResetData.ClanFights = CLANCOMBATADAY;
-	ResetData.DaysOfProtection = 4;
-	ResetData.MaxPermanentMembers = 4;
+	InitDefaults();
 
 	ColorArea(0,2+MAX_OPTION, 39, 2+MAX_OPTION, 7);
 	gotoxy(2, CurOption+3);

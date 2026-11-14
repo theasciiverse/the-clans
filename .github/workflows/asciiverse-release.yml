@@ -1,0 +1,122 @@
+# Builds The Clans for the Asciiverse catalog: one archive per target,
+# the-clans-<target>.tar.gz, plus SHA256SUMS, attached to a GitHub release
+# (hub/catalog/SCHEMA.md, release.source = "github"). For everyone else:
+# .deb, .rpm, .apk and Arch packages of the static Linux build, made by
+# nfpm (asciiverse/nfpm.yaml). Runs on our tags (*-av.*), or by hand.
+#
+# Linux builds run in Alpine and link statically, so they carry the -musl
+# triple av looks for first and need nothing on the player's machine.
+# The release goes out when Linux has built; macOS joins when it builds.
+
+name: asciiverse-release
+
+on:
+  push:
+    tags: ["*-av.*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "existing tag to build and release"
+        required: true
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-musl, runner: ubuntu-24.04, arch: amd64 }
+          - { target: aarch64-unknown-linux-musl, runner: ubuntu-24.04-arm, arch: arm64 }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Build and package
+        run: |
+          docker run --rm -v "$PWD":/src -w /src alpine:3.22 sh -c '
+            apk add --no-cache build-base bash >/dev/null &&
+            LDFLAGS="-static" asciiverse/package.sh ${{ matrix.target }} &&
+            chown -R '"$(id -u):$(id -g)"' /src'
+          file stage-av/lib/clans
+
+      - name: Smoke test
+        run: |
+          export XDG_STATE_HOME="$RUNNER_TEMP/state"
+          mkdir -p "$XDG_STATE_HOME/the-clans" && cp stage-av/game/* "$XDG_STATE_HOME/the-clans/"
+          (cd "$XDG_STATE_HOME/the-clans" && printf 'SysopName Smoke\nBBSName Asciiverse\n' > clans.cfg && "$GITHUB_WORKSPACE/stage-av/lib/reset" --local </dev/null >/dev/null)
+          test -s "$XDG_STATE_HOME/the-clans/game.dat"
+          test -s "$XDG_STATE_HOME/the-clans/village.dat"
+
+      - name: System packages
+        run: |
+          v="${TAG#v}"; export VERSION="${v%%-av.*}" RELEASE="${TAG##*-av.}" ARCH="${{ matrix.arch }}"
+          for p in deb rpm apk archlinux; do
+            docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/src -w /src \
+              -e VERSION -e RELEASE -e ARCH goreleaser/nfpm:v2.43.0 \
+              package --config asciiverse/nfpm.yaml --packager "$p" --target dist/
+          done
+          ls -l dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/*
+
+  macos:
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-apple-darwin, runner: macos-15-intel }
+          - { target: aarch64-apple-darwin, runner: macos-15 }
+    runs-on: ${{ matrix.runner }}
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Build and package
+        run: |
+          brew install make
+          PATH="$(brew --prefix make)/libexec/gnubin:$PATH" asciiverse/package.sh ${{ matrix.target }}
+          file stage-av/lib/clans
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/*
+
+  release:
+    needs: [linux, macos]
+    if: ${{ !cancelled() && needs.linux.result == 'success' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum * > SHA256SUMS && cat SHA256SUMS
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "$TAG" -R "$GITHUB_REPOSITORY" --title "The Clans $TAG" \
+                 --notes "The Clans $TAG, Allen Ussher's BBS door game as kept in Synchronet, with the changes in PATCHES.md, built for the Asciiverse catalog, with .deb, .rpm, .apk and Arch packages."
+          gh release upload "$TAG" dist/* -R "$GITHUB_REPOSITORY" --clobber
